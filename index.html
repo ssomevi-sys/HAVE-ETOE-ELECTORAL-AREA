@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
@@ -580,6 +581,50 @@ textarea{resize:vertical;min-height:80px}
 
 <!-- ══════ JAVASCRIPT ══════ -->
 <script>
+  // ══════════════════════════════════
+//  SUPABASE CLOUD SYNC
+// ══════════════════════════════════
+const SUPABASE_URL = 'https://xsiqvgncghyhdevqysmr.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_cOqcgL8cfIAm7Lm2C7nzBw_q05E3rLR';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Pull everything from the cloud
+async function cloudLoad() {
+  const [m, e, s, mn] = await Promise.all([
+    sb.from('members').select('*').order('created_at'),
+    sb.from('executives').select('*').order('created_at'),
+    sb.from('sympathizers').select('*').order('created_at'),
+    sb.from('minutes').select('*').order('created_at'),
+  ]);
+  STATE.members      = m.data  || [];
+  STATE.executives   = e.data  || [];
+  STATE.sympathizers = s.data  || [];
+  STATE.minutes      = mn.data || [];
+  if (typeof renderAll === 'function') renderAll();
+}
+
+// Save one record to the cloud
+async function cloudSave(table, row) {
+  const { data, error } = await sb.from(table).upsert(row).select().single();
+  if (error) { toast('Save failed: ' + error.message, 'err'); return null; }
+  return data;
+}
+
+// Delete one record from the cloud
+async function cloudDelete(table, id) {
+  const { error } = await sb.from(table).delete().eq('id', id);
+  if (error) toast('Delete failed: ' + error.message, 'err');
+}
+
+// Listen for changes from OTHER devices — live sync
+['members','executives','sympathizers','minutes'].forEach(table => {
+  sb.channel('rt-' + table)
+    .on('postgres_changes', { event: '*', schema: 'public', table }, () => {
+      cloudLoad();
+    })
+    .subscribe();
+});
+
 // ══════════════════════════════════
 //  STATE
 // ══════════════════════════════════
@@ -631,10 +676,9 @@ var mnFileData = null;
 // ══════════════════════════════════
 function loadState(){
   try{
-    var s = localStorage.getItem('npp_hf');
-    if(s){ var p = JSON.parse(s); STATE = Object.assign(STATE, p); }
-    if(!STATE.members.length){ STATE.members = SEED_MEMBERS; }
-    if(!STATE.minutes.length){ STATE.minutes = SEED_MINUTES; }
+    function loadState() { cloudLoad(); }
+function saveState() { /* no-op — each add/edit/delete now calls cloudSave/cloudDelete directly */ }
+}
     saveState();
   }catch(e){
     STATE.members = SEED_MEMBERS;
@@ -642,11 +686,9 @@ function loadState(){
   }
 }
 function saveState(){
-  STATE.lastUpdated = Date.now();
-  try{ localStorage.setItem('npp_hf', JSON.stringify(STATE)); }catch(e){}
-  // BroadcastChannel for cross-tab sync
-  try{ new BroadcastChannel('npp_hf').postMessage(STATE); }catch(e){}
-}
+  const saved = await cloudSave('members', newMember);
+if (saved) { STATE.members.push(saved); renderAll(); }
+
 // Cross-tab sync
 try{
   var bc = new BroadcastChannel('npp_hf');
@@ -935,11 +977,13 @@ function editMember(id){
   setText('mem-form-title','✏️ Edit Member');
   document.querySelector('#ap-members').scrollIntoView({behavior:'smooth'});
 }
-function delMember(id){
+async function delMember(id){
   if(!confirm('Delete this member?')) return;
-  STATE.members=STATE.members.filter(function(x){return x.id!==id;});
-  saveState(); renderAdmMembers(); renderAdmDash(); toast('Member deleted.');
+  await cloudDelete('members', id);
+  STATE.members = STATE.members.filter(function(x){return x.id!==id;});
+  renderAdmMembers(); renderAdmDash(); toast('Member deleted.');
 }
+
 function clearMemForm(){
   ['m-name','m-phone','m-area','m-date','mem-edit-id'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
   setText('mem-form-title','➕ Add New Member');
@@ -970,10 +1014,13 @@ function editExec(id){
   document.getElementById('ex-area').value=e.area||'';
   document.getElementById('ex-edit-id').value=id;
 }
-function delExec(id){
+ async function delExec(id){
   if(!confirm('Delete this executive?')) return;
-  STATE.executives=STATE.executives.filter(function(x){return x.id!==id;});
-  saveState(); renderAdmExec(); renderAdmDash(); toast('Executive deleted.');
+  await cloudDelete('executives', id);
+  STATE.executives = STATE.executives.filter(function(x){return x.id!==id;});
+  renderAdmExecs(); renderAdmDash(); toast('Executive deleted.');
+}
+
 }
 function clearExForm(){
   ['ex-name','ex-phone','ex-pos','ex-area','ex-edit-id'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
@@ -1004,10 +1051,13 @@ function editSymp(id){
   document.getElementById('sy-notes').value=s.notes||'';
   document.getElementById('sy-edit-id').value=id;
 }
-function delSymp(id){
+  async function delSymp(id){
   if(!confirm('Delete this sympathizer?')) return;
-  STATE.sympathizers=STATE.sympathizers.filter(function(x){return x.id!==id;});
-  saveState(); renderAdmSymp(); renderAdmDash(); toast('Sympathizer deleted.');
+  await cloudDelete('sympathizers', id);
+  STATE.sympathizers = STATE.sympathizers.filter(function(x){return x.id!==id;});
+  renderAdmSymps(); renderAdmDash(); toast('Sympathizer deleted.');
+}
+
 }
 function clearSyForm(){
   ['sy-name','sy-phone','sy-area','sy-notes','sy-edit-id'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
@@ -1037,11 +1087,13 @@ function saveMinute(){
   saveState(); clearMinForm(); renderAdmMinutes();
   toast('✅ Meeting record saved!','ok');
 }
-function delMinute(id){
-  if(!confirm('Delete this meeting record?')) return;
-  STATE.minutes=STATE.minutes.filter(function(x){return x.id!==id;});
-  saveState(); renderAdmMinutes(); toast('Record deleted.');
+  async function delMin(id){
+  if(!confirm('Delete this minute?')) return;
+  await cloudDelete('minutes', id);
+  STATE.minutes = STATE.minutes.filter(function(x){return x.id!==id;});
+  renderAdmMins(); renderAdmDash(); toast('Minute deleted.');
 }
+
 function clearMinForm(){
   ['mn-title','mn-date','mn-venue','mn-body'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
   mnFileData=null;
