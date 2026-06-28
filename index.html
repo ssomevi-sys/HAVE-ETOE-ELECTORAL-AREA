@@ -20,8 +20,8 @@
   --red:#CE1126;--red2:#A50E1E;--red-pale:#FEE8EB;
   --blue:#003087;--blue2:#001F5C;--blue-pale:#E8EEFF;
   --white:#FFFFFF;--cream:#FAFBFC;
-  --gold:#D4A017;--goldL:#F0C040;
-  --ink:#0D1B2A;--mist:#4A5568;--fog:#9CA3AF;--haze:#E5E7EB;
+  --gold:#17069b;--goldL:#d31212;
+  --ink:#0D1B2A;--mist:#14028f;--fog:#9CA3AF;--haze:#E5E7EB;
   --green:#15803D;--green-pale:#DCFCE7;
   --sh:0 2px 12px rgba(0,48,135,.12);--sh-lg:0 8px 32px rgba(0,48,135,.18);
   --r:10px;--r-sm:6px;
@@ -617,15 +617,19 @@ document.querySelectorAll('#login-logo,#pub-logo,#hero-logo').forEach(function(e
 //  FREE Firebase project (see setup guide below).
 //  Current config uses a shared demo project.
 // ════════════════════════════════════════════════════
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
+// ══════════════════════════════════════════════════════════════
+//  YOUR FIREBASE CONFIG
+//  Replace ALL values below with your own from Firebase Console
+//  See FIREBASE_SETUP_GUIDE.md for step-by-step instructions
+//
+//  HOW TO GET YOUR CONFIG:
+//  1. Go to console.firebase.google.com
+//  2. Create project "npp-have-etoe"
+//  3. Add Realtime Database (test mode)
+//  4. Project Settings → Your Apps → </> Web → copy config
+//  5. Paste the values below, replacing each "YOUR_..." value
+// ══════════════════════════════════════════════════════════════
+const FB_CONFIG = {
   apiKey: "AIzaSyA7ttN0hCu0D8BSBM0X6BwZ-v6OWF6zssc",
   authDomain: "npp-have-etoe.firebaseapp.com",
   databaseURL: "https://npp-have-etoe-default-rtdb.firebaseio.com",
@@ -635,11 +639,16 @@ const firebaseConfig = {
   appId: "1:748409458308:web:925164ed4c63024866fcd1",
   measurementId: "G-YQ1WY4E2VN"
 };
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
-
+// ══════════════════════════════════════════════════════════════
+//  EXAMPLE of what a real config looks like:
+//  apiKey: "AIzaSyBxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+//  authDomain: "npp-have-etoe.firebaseapp.com",
+//  databaseURL: "https://npp-have-etoe-default-rtdb.firebaseio.com",
+//  projectId: "npp-have-etoe",
+//  storageBucket: "npp-have-etoe.appspot.com",
+//  messagingSenderId: "123456789012",
+//  appId: "1:123456789012:web:abcdef1234567890"
+// ══════════════════════════════════════════════════════════════
 
 // ════════════════════════════════════════════════════
 //  INITIAL SEED DATA (loaded to Firebase on first run)
@@ -750,9 +759,21 @@ function initFirebase(){
     });
 
   } catch(err) {
-    console.warn('Firebase error:', err);
+    console.warn('Firebase error:', err.message);
     setSyncStatus(false);
-    toast('⚠ Could not connect to database. See setup guide.','err');
+    // Show helpful message
+    var bar = document.getElementById('sync-bar');
+    var msg = document.getElementById('sync-msg');
+    if(bar){ bar.className='err'; }
+    if(msg){ msg.innerHTML = '⚠ <strong>Firebase not configured yet.</strong> Open the HTML file, find FB_CONFIG and replace YOUR_... values with your Firebase project credentials. See FIREBASE_SETUP_GUIDE.md'; }
+    // Load seed data locally so the page is not completely empty
+    STATE.members = {};
+    SEED_MEMBERS.forEach(function(m,i){ STATE.members['local_'+i] = m; });
+    STATE.minutes = {};
+    SEED_MINUTES.forEach(function(m,i){ STATE.minutes['local_'+i] = m; });
+    renderPubMembers();
+    renderPubMinutes();
+    updateStats();
   }
 }
 
