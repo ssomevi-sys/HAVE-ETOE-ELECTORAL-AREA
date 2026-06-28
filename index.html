@@ -678,12 +678,7 @@ function loadState(){
     function loadState() { cloudLoad(); }
 function saveState() { /* no-op — each add/edit/delete now calls cloudSave/cloudDelete directly */ }
 }
-    saveState();
-  }catch(e){
-    STATE.members = SEED_MEMBERS;
-    STATE.minutes = SEED_MINUTES;
-  }
-}
+    
 function saveState(){
   const saved = await cloudSave('members', newMember);
 if (saved) { STATE.members.push(saved); renderAll(); }
